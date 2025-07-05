@@ -56,12 +56,19 @@ export async function POST(req: Request) {
     
     // 2. Process the event
     const event = JSON.parse(body);
+    let notes: { paymentId?: string; paymentIds?: string; } | null = null;
+    let razorpayPaymentId: string | null = null;
 
-    if (event.event === 'payment.captured') {
-        const paymentEntity = event.payload.payment.entity;
-        const notes = paymentEntity.notes;
-        const razorpayPaymentId = paymentEntity.id;
+    // Handle both relevant events for payment links
+    if (event.event === 'payment_link.paid') {
+        notes = event.payload.payment_link.entity.notes;
+        razorpayPaymentId = event.payload.payment.entity.id;
+    } else if (event.event === 'payment.captured') {
+        notes = event.payload.payment.entity.notes;
+        razorpayPaymentId = event.payload.payment.entity.id;
+    }
 
+    if (notes && razorpayPaymentId) {
         if (notes.paymentIds) {
             // Bundled payment logic
             const paymentIds = notes.paymentIds.split(',');
@@ -75,7 +82,7 @@ export async function POST(req: Request) {
                 });
             });
             await batch.commit();
-            console.log(`Bundled payments ${notes.paymentIds} successfully marked as Paid.`);
+            console.log(`Bundled payments ${notes.paymentIds} successfully marked as Paid via ${event.event}.`);
         } else if (notes.paymentId) {
             // Single payment logic
             const paymentRef = db.collection('payments').doc(notes.paymentId);
@@ -84,12 +91,12 @@ export async function POST(req: Request) {
                 paidOn: new Date().toISOString(),
                 razorpay_payment_id: razorpayPaymentId,
             });
-            console.log(`Payment ${notes.paymentId} successfully marked as Paid.`);
+            console.log(`Payment ${notes.paymentId} successfully marked as Paid via ${event.event}.`);
         } else {
-            console.error('Webhook received but paymentId or paymentIds missing in notes.');
-            return NextResponse.json({ message: 'Payment ID(s) missing in notes' }, { status: 400 });
+            console.error(`Webhook for ${event.event} received but paymentId or paymentIds missing in notes.`);
         }
     }
+
 
     // 3. Acknowledge the event
     return NextResponse.json({ status: 'ok' });

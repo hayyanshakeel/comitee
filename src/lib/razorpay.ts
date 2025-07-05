@@ -17,7 +17,7 @@ export async function createPaymentLink({
   userId: string;
 }) {
   return await razorpay.paymentLink.create({
-    amount: amount * 100, // Razorpay expects paise
+    amount: amount * 100,
     currency: "INR",
     accept_partial: false,
     description: "Monthly subscription",

@@ -1,14 +1,13 @@
-import { db } from "./firebase"; // Adjust the import to match your setup
+import { db } from "./firebase";
+import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
 
 export async function getAllUsers() {
-  if (!db) throw new Error("Firestore DB not initialized");
-  const snapshot = await db.collection("users").get();
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+  const snapshot = await getDocs(collection(db, "users"));
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 export async function saveUserPaymentLink(userId: string, url: string, paymentLinkId: string) {
-  if (!db) throw new Error("Firestore DB not initialized");
-  await db.collection("users").doc(userId).update({
+  await updateDoc(doc(db, "users", userId), {
     paymentLink: {
       url,
       id: paymentLinkId,

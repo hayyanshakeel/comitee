@@ -1,59 +1,45 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
-    function isUserAuthenticated() {
+    // Helper function to check if a user is an administrator
+    // This is more secure as it checks the verified email from the auth token
+    function isAdmin() {
+      return request.auth.token.email == 'sheikhhayyaan@gmail.com' && request.auth.token.email_verified;
+    }
+    
+    // A user is authenticated if the request auth object is not null
+    function isAuthenticated() {
       return request.auth != null;
     }
 
-    function isUserRole(role) {
-      // Check if the user document exists and the role matches.
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
-    }
-
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
-
-    // --- Users Collection ---
-    // Only admins can create, list, or delete users.
-    // Users can read and update their OWN profile.
+    // Rules for the 'users' collection
     match /users/{userId} {
-      allow read: if isUserAuthenticated() && (isOwner(userId) || isUserRole('admin'));
-      allow update: if isUserAuthenticated() && isOwner(userId);
-      allow create, delete: if isUserAuthenticated() && isUserRole('admin');
-      
-      // Admins can list all users.
-      allow list: if isUserAuthenticated() && isUserRole('admin');
-
-      // --- Payments Subcollection (for direct access) ---
-      match /payments/{paymentId} {
-        allow read: if isUserAuthenticated() && (isOwner(userId) || isUserRole('admin'));
-        allow create, update, delete: if isUserAuthenticated() && isUserRole('admin');
-      }
-    }
-
-    // --- Payments Collection Group (for admin queries) ---
-    // This allows admins to query across all 'payments' subcollections at once.
-    // This is required for the Admin Dashboard and User Management pages.
-    match /{path=**}/payments/{paymentId} {
-      allow read: if isUserAuthenticated() && isUserRole('admin');
+      // An authenticated user can read/write their own document
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      // An admin can read/write any user document
+      allow read, write: if isAuthenticated() && isAdmin();
     }
     
-    // --- Expenditures Collection ---
-    // Only admins can manage expenditures.
-    match /expenditures/{expenditureId} {
-        allow read, write, create, delete: if isUserAuthenticated() && isUserRole('admin');
+    // Rules for the 'payments' collection
+    match /payments/{paymentId} {
+        // An admin can perform any action on any payment
+        allow read, write: if isAuthenticated() && isAdmin();
+        // An authenticated user can only read their own payments
+        allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
     }
 
-    // --- App Settings Collection ---
-    // Admins can manage settings.
-    // Authenticated users can read settings (e.g., to get monthly fee).
-    match /app_settings/payment {
-      allow read: if isUserAuthenticated();
-      allow write: if isUserAuthenticated() && isUserRole('admin');
+    // Rules for the 'expenditures' collection
+    match /expenditures/{expenditureId} {
+        // Only admins can read and write expenditures
+        allow read, write: if isAuthenticated() && isAdmin();
+    }
+
+    // Rules for the 'settings' collection
+    match /settings/{docId} {
+        // Only admins can read and write settings
+        allow read, write: if isAuthenticated() && isAdmin();
     }
   }
 }
